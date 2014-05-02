@@ -5,9 +5,11 @@ MAINTAINER Sam Saffron "https://twitter.com/samsaffron"
 # Discourse specific bits
 RUN useradd discourse -s /bin/bash -m -U &&\
     mkdir /var/www && cd /var/www &&\
-     git clone --depth 1 -b add_custom_embed_by_username https://github.com/justinleveck/discourse.git &&\
+     git clone https://github.com/justinleveck/discourse.git &&\
      chown -R discourse:discourse /var/www/discourse &&\
     cd /var/www/discourse &&\
+     git pull &&\
+     git checkout add_custom_embed_by_username &&\
      sudo -u discourse RAILS4=1 bundle install --deployment \
          --without test --without development &&\
     cd /var/www/discourse/vendor/bundle &&\
