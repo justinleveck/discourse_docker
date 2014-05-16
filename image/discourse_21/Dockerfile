@@ -1,15 +1,13 @@
-FROM samsaffron/discourse_base:0.2.0
+FROM samsaffron/discourse_base_21:2.1.2
 
 MAINTAINER Sam Saffron "https://twitter.com/samsaffron"
 
 # Discourse specific bits
 RUN useradd discourse -s /bin/bash -m -U &&\
     mkdir /var/www && cd /var/www &&\
-     git clone https://github.com/justinleveck/discourse.git &&\
+     git clone --depth 1 https://github.com/discourse/discourse.git &&\
      chown -R discourse:discourse /var/www/discourse &&\
     cd /var/www/discourse &&\
-     git pull &&\
-     git checkout add_custom_embed_by_username &&\
      sudo -u discourse RAILS4=1 bundle install --deployment \
          --without test --without development &&\
     cd /var/www/discourse/vendor/bundle &&\

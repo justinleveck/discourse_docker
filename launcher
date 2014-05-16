@@ -6,6 +6,9 @@ opt=$3
 
 cd "$(dirname "$0")"
 
+docker_min_version='0.9.1'
+docker_rec_version='0.11.1'
+
 config_file=containers/"$config".yml
 cidfile=cids/"$config".cid
 cidbootstrap=cids/"$config"_boostrap.cid
@@ -38,6 +41,27 @@ usage () {
   exit 1
 }
 
+compare_version() {
+    declare -a ver_a
+    declare -a ver_b
+    IFS=. read -a ver_a <<< "$1"
+    IFS=. read -a ver_b <<< "$2"
+
+    while [[ -n $ver_a ]]; do
+        if (( ver_a > ver_b )); then
+            return 0
+        elif (( ver_b > ver_a )); then
+            return 1
+        else
+            unset ver_a[0]
+            ver_a=("${ver_a[@]}")
+            unset ver_b[0]
+            ver_b=("${ver_b[@]}")
+        fi
+    done
+    return 1  # They are equal
+}
+
 prereqs() {
 
   # 1. docker daemon running?
@@ -48,23 +72,27 @@ prereqs() {
     exit 1
   fi
 
-  # 2. running aufs
+  # 2. running aufs 
   test=`$docker_path info 2> /dev/null | grep 'Driver: aufs'`
   if [[ "$test" =~ "aufs" ]] ; then : ; else
-    echo "Your Docker installation is not using aufs"
-    echo "Device mapper and other experimental drivers are unstable"
-    echo
-    echo "Please ensure your kernel is running linux extras and aufs"
-    echo "Please follow the installation guide for Docker here: http://docs.docker.io/en/latest/installation/ubuntulinux/"
+    echo "Your Docker installation is not using aufs, in the past we have had issues with it"
+    echo "If you are unable to bootstrap your image (or stop it) please report the issue at:"
+    echo "https://meta.discourse.org/t/discourse-docker-installation-without-aufs/15639"
+  fi
+
+  # 3. running recommended docker version
+  test=($($docker_path --version))  # Get docker version string
+  test=${test[2]//,/}  # Get version alone and strip comma if exists
+
+  # At least minimum version
+  if compare_version "${socker_min_version}" "${test}"; then
+    echo "ERROR: Docker version ${test} not supported, please upgrade to at least ${docker_min_version}, or recommended ${docker_rec_version}"
     exit 1
   fi
 
-  # 3. running docker 0.10+
-  test=`$docker_path --version | grep 0.10`
-
-  if [[ "$test" =~ "0.10" ]] ; then : ; else
-    echo "Your Docker installation is old, please upgrade to 0.10.0 or up"
-    exit 1
+  # Recommend best version
+  if compare_version "${docker_rec_version}" "${test}"; then
+    echo "WARNING: Docker version ${test} deprecated, recommend upgrade to ${docker_rec_version} or newer."
   fi
 
   # 4. able to attach stderr / out / tty
@@ -84,16 +112,16 @@ fi
 get_ssh_pub_key() {
   if tty -s ; then
     if [[ ! -e ~/.ssh/id_rsa.pub && ! -e ~/.ssh/id_dsa.pub ]] ; then
-      echo You have no SSH key associated to this profile
-      echo "(This will allow you ssh access into your container)"
-      read -p "Generate SSH key at ~/.ssh/id_rsa.pub? (y/N) " -n 1 -r
-      if [[ $REPLY =~ ^[Yy]$ ]] ; then
+      echo "This user has no SSH key, but a SSH key is required to access the Discourse Docker container."
+      read -p "Generate a SSH key? (Y/n) " -n 1 -r
+      if [[ $REPLY =~ ^[Nn]$ ]] ; then
+        echo
+        echo WARNING: You may not be able to log in to your container.
+        echo
+      else
         echo
         echo Generating SSH key
         mkdir -p ~/.ssh && ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
-      else
-        echo
-        echo WARNING: You may not be able to log in to your container.
         echo
       fi
     fi
